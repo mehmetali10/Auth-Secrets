@@ -29,7 +29,8 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -43,11 +44,11 @@ passport.serializeUser(function(user, done) {
     done(null, user.id);
   });
   
-  passport.deserializeUser(function(id, done) {
-    User.findById(id, function(err,user){
-        done(err, user);
-    });
+passport.deserializeUser(function(id, done) {
+  User.findById(id, function(err,user){
+      done(err, user);
   });
+});
 
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
@@ -70,6 +71,7 @@ app.get("/login", (req, res)=>{res.render("login");});
 
 app.get("/register", (req, res)=>{res.render("register");});
 
+
 app.get("/auth/google",
   passport.authenticate("google", { scope: ["profile"] }));
 
@@ -79,16 +81,47 @@ app.get("/auth/google/secrets",
   function(req, res) {
     console.log("Successful authentication, redirect to secrets");
     res.redirect("/secrets");
+});
+
+
+app.get("/secrets", function(req, res){
+    User.find({"secret": {$ne: null}}, function(err, foundUsers){
+      if (err){
+        console.log(err);
+      } else {
+        if (foundUsers) {
+          res.render("secrets", {usersWithSecrets: foundUsers});
+        }
+      }
+    });
   });
 
 
-app.get("/secrets", (req, res)=>{
+app.get("/submit", (req,res)=>{
     if(req.isAuthenticated()){
-        res.render("secrets");
-    } else {
+        res.render("submit");
+    }else {
         res.redirect("/login");
     }
 });
+
+app.post("/submit", (req,res)=>{
+    const submittedSecret = req.body.secret;
+
+    User.findById(req.user.id, (err, foundUser)=>{
+        if(err){
+            console.log(err);
+            res.render("/submit");
+        } else {
+            if(foundUser){
+                foundUser.secret = submittedSecret;
+                foundUser.save(function(){
+                    res.redirect("/secrets");
+                });
+            }
+        }
+    })
+})
 
 
 app.post("/register", (req, res)=>{
